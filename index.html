@@ -46,7 +46,7 @@
 <body>
 <header><div class="wrap">
   <h1>Napelemes rendszer energiatárolóval - órás modell</h1>
-  <span class="pill">PVGIS fájlok → nincs külső API-hívás (CORS)</span>
+  <span class="pill">Copyright © 2025 Wattmanager Kft.</span>
 </div></header>
 
 <main>
@@ -118,8 +118,8 @@
           <div><label>Min. SOC (%)</label><input type="number" id="batMin" value="10" step="1" min="0" max="90" /></div>
           <div><label>Körhatásfok (round-trip, %)</label><input type="number" id="batEta" value="90" step="1" min="50" max="100" /></div>
         </div>
-        <label><input type="checkbox" id="zeroFeed" /> Zero-feed-in mód (export = 0, inverter visszaszabályoz)</label>
-        <div class="hint">Zero-feed-in esetén a PV „hatásos termelés” = közvetlen felhasználás + akkuba töltött energia; a felesleg curtailt.</div>
+        <label><input type="checkbox" id="zeroFeed" /> Visszwatt korlátozás (export = 0, inverter visszaszabályoz)</label>
+        <div class="hint">Visszwatt korlátozás esetén a PV „hatásos termelés” = közvetlen felhasználás + akkuba töltött energia; a felesleg lekorlátozva.</div>
       </div>
 
       <div class="card" style="background:#0b1220">
@@ -142,7 +142,7 @@
         </div>
         <div class="row">
           <div><label>Diszkontráta (%)</label><input type="number" id="rate" value="6" step="0.1" min="0" /></div>
-          <div><label>Áremelkedés (%/év)</label><input type="number" id="esc" value="0" step="0.1" min="0" /></div>
+          <div><label>Áremelkedés (%/év) - Vill. és export is</label><input type="number" id="esc" value="0" step="0.1" min="0" /></div>
         </div>
         <div class="row">
           <div><label>Elemzési időtáv (év)</label><input type="number" id="years" value="25" min="1" /></div>
@@ -160,7 +160,7 @@
     <h2>2) Eredmények</h2>
     <div class="kpi">
       <div class="tile"><div class="t">Éves PV termelés (export engedélyezett)</div><div class="v" id="kpiPV">–</div><div class="hint">PVGIS órás „P” [W] → kWh/h összegezve.</div></div>
-      <div class="tile"><div class="t">Éves PV „termelés” (zero-feed-in)</div><div class="v" id="kpiPVzfi">–</div><div class="hint">Önfogyasztás + akkuba töltés (curtailt nélkül).</div></div>
+      <div class="tile"><div class="t">Éves PV „termelés” (visszwatt)</div><div class="v" id="kpiPVzfi">–</div><div class="hint">Önfogyasztás + akkuba töltés (curtailt nélkül).</div></div>
       <div class="tile"><div class="t">Éves hasznosított energia akkumulátorral</div><div class="v" id="kpiUse">–</div><div class="hint">Közvetlen PV + akkuból kisütött energia.</div></div>
     </div>
 
@@ -191,7 +191,7 @@
       </div>
     </div>
     <div class="footer">
-      <p>Megjegyzés: a zero-feed-in exportot 0-ra kényszeríti, a felesleg curtailt.</p>
+      <p>Megjegyzés: a visszwatt az exportot 0-ra kényszeríti, a felesleg lekorlátozva.</p>
     </div>
   </div>
 
