@@ -28,7 +28,7 @@
     input[type="file"]{width:100%}
     .hint{font-size:12px;color:var(--muted)}
     button{background:var(--accent);color:#0b1220;border:0;padding:12px 16px;border-radius:12px;font-weight:600;cursor:pointer}
-    button.secondary{background:#0b1220;color:var(--text);border:1px solid #334155}
+    button.secondary{background:#0b1220;color:#fff;border:1px solid #334155}
     button#runBtn{transition:filter .15s ease,opacity .15s ease,transform .05s ease}
     button#runBtn:active{transform:translateY(1px)}
     button#runBtn.busy{filter:brightness(.85);opacity:.8;cursor:progress}
@@ -84,17 +84,9 @@
         </select>
 
         <div id="pvTemplateBlock" style="display:none; margin-top:10px">
-          <div class="row">
-            <div>
-              <label>PV DC kapacitás (kWp)</label>
-              <input type="number" id="pvKwp" value="10" step="0.1" min="0" />
-            </div>
-          </div>
-          <div class="hint">
-            A sablont a program automatikusan betölti a <b>PV-1kWp-BP-south15.csv</b> fájlból (ugyanabba a mappába tedd, mint az index.html).
-            Ha a böngésző tiltja a helyi fájl olvasást (<code>file://</code>), futtasd helyi webszerverről (pl. <code>python -m http.server</code>),
-            vagy illeszd be a CSV-t az oldal alján lévő rejtett <b>pvTemplateInline</b> blokkba.
-          </div>
+          <label>PV DC kapacitás (kWp)</label>
+          <input type="number" id="pvKwp" value="10" step="0.1" min="0" />
+          <div class="hint">A sablon automatikusan betöltődik a webhely gyökeréből: <b>PV-1kWp-BP-south15.csv</b>. Ha a böngésző tiltja a helyi fájl olvasást (<code>file://</code>), futtasd kis webszerverről (pl. <code>python -m http.server</code>), vagy illeszd be a CSV-t a dokumentum végén található <b>pvTemplateInline</b> blokkba.</div>
         </div>
 
         <h3 style="margin-top:12px">PVGIS termelés (1–3 string)</h3>
@@ -327,27 +319,21 @@
 
 </main>
 
-<!-- Opcionális inline fallback a sablon CSV-hez (hagyd üresen, ha fájlból töltöd) -->
+<!-- Opcionális inline fallback a sablon CSV-hez -->
 <script type="text/plain" id="pvTemplateInline">
-<!-- Ide beilleszthető a PV-1kWp-BP-south15.csv teljes tartalma, ha nem lehet fájlt olvasni -->
+<!-- Ide beilleszthető a PV-1kWp-BP-south15.csv teljes tartalma, ha nem tudod fájlból kiszolgálni. -->
 </script>
 
 <script>
-// ======= Globals =======
 const $ = (id)=>document.getElementById(id);
 let lastSeries = null; window.lastSeries = null;
-
-// ======= Util =======
 const fmt = (x, digits=0)=> (isFinite(x)? x.toLocaleString('hu-HU',{maximumFractionDigits:digits, minimumFractionDigits:digits}): '–');
 const sum = arr => arr.reduce((a,b)=>a+(+b||0),0);
 const clamp = (x,a,b)=> Math.min(Math.max(x,a),b);
 function currencySymbol(code){ return {HUF:' Ft', EUR:' €', USD:' $'}[code] || ' Ft'; }
-
 function updateCurrencyLabels(){ const ccy = $('ccy').value; document.querySelectorAll('.ccyLabel').forEach(el=> el.textContent = ccy); }
 function updateZeroFeedUI(){ const zf=$('zeroFeed').checked; const lbl=$('exportPriceLabel'); const ep=$('exportPrice'); if(zf){ ep.disabled=true; lbl.textContent='Export ár (zero-feed módban nem releváns)'; } else { ep.disabled=false; lbl.innerHTML='Export ár (<span class="ccyLabel">'+$('ccy').value+'</span>/kWh, default 0)'; updateCurrencyLabels(); } }
 function updatePVModeUI(){ const sel=$('pvMode'); if(!sel) return; const mode=sel.value; const up=$('pvUploadBlock'); const tp=$('pvTemplateBlock'); if(up) up.style.display = (mode==='upload')?'block':'none'; if(tp) tp.style.display = (mode==='template')?'block':'none'; }
-
-// ======= CSV helpers =======
 function parseCSV(text){
   const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0 && !l.trim().startsWith('#'));
   if(lines.length===0) return [];
@@ -357,15 +343,11 @@ function parseCSV(text){
   return vals;
 }
 async function readFileAsText(file){ return new Promise((resolve,reject)=>{ const fr=new FileReader(); fr.onerror=()=>reject(fr.error); fr.onload=()=>resolve(fr.result); fr.readAsText(file); }); }
-
-// ======= Load parsing =======
 async function parseLoadCSV(file){ const txt=await readFileAsText(file); const vals=parseCSV(txt);
   if(vals.length===24){ const day=vals.slice(); const out=[]; for(let d=0; d<365; d++){ out.push(...day);} return out; }
   if(vals.length===8784){ return vals.filter((_,i)=> !(i>=1416 && i<1440)); }
   if(vals.length!==8760) throw new Error('A fogyasztási sor hossza legyen 24, 8760 vagy 8784 (kapott: '+vals.length+')');
   return vals; }
-
-// ======= PVGIS parsing =======
 async function parsePVGISFile(file){
   const txt = await readFileAsText(file);
   try{
@@ -393,38 +375,21 @@ async function parsePVGISFile(file){
   if(L===17520){ const years=sliceYears(vals,2); if(mode==='first') return toKWh(years[0]); if(mode==='last') return toKWh(years[1]); return toKWh(avgCols(years)); }
   throw new Error('PVGIS CSV hossza nem támogatott: '+L+' (várható: 8760/8784 vagy 2–4 év összefűzve)');
 }
-
-// ======= Beépített sablon betöltése =======
-function getInlineTemplateCSV(){
-  const el = document.getElementById('pvTemplateInline');
-  if(!el) return '';
-  return (el.textContent || el.innerText || '').trim();
-}
-async function loadEmbeddedTemplate(){
-  // 1) Ha van inline CSV beillesztve, azt használjuk
-  const inline = getInlineTemplateCSV();
-  if(inline.length > 0){
-    return parseTemplateCSVText(inline);
-  }
-  // 2) Fájl a mappában
-  try{
-    const resp = await fetch('PV-1kWp-BP-south15.csv', {cache:'no-store'});
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const txt = await resp.text();
-    return parseTemplateCSVText(txt);
-  }catch(e){
-    throw new Error('Nem találom a sablont. Helyezd a „PV-1kWp-BP-south15.csv” fájlt az index.html mellé, vagy illeszd be a CSV-t az oldal alján lévő „pvTemplateInline” blokkba. Eredeti hiba: '+(e.message||e));
-  }
-}
+function getInlineTemplateCSV(){ const el = document.getElementById('pvTemplateInline'); if(!el) return ''; return (el.textContent || el.innerText || '').trim(); }
 function parseTemplateCSVText(text){
-  let tpl = parseCSV(text);
+  const parseCSVLoose=(txt)=>{ const lines=txt.split(/\r?\n/).filter(l=>l.trim()!=='' && !l.trim().startsWith('#')); if(lines.length===0) return []; const delims=[',',';','\t']; let d=','; let best=-1; for(const x of delims){const s=lines[0].split(x).length; if(s>best){best=s; d=x;}} const headerHasAlpha=/[A-Za-z]/.test(lines[0]); const start=headerHasAlpha?1:0; const out=[]; for(let i=start;i<lines.length;i++){ const parts=lines[i].split(d); let pushed=false; for(const p of parts){ const v=parseFloat(String(p).replace(',','.')); if(!isNaN(v)){ out.push(v); pushed=true; break; } } } return out; };
+  let tpl=parseCSVLoose(text);
   if(tpl.length===24){ const day=tpl.slice(); tpl=[]; for(let d=0; d<365; d++){ tpl.push(...day);} }
   else if(tpl.length===8784){ tpl = tpl.filter((_,i)=> !(i>=1416 && i<1440)); }
   if(tpl.length!==8760) throw new Error('A sablon hossza hibás: '+tpl.length+' (várt: 8760 vagy 24/8784 automatikus illesztéssel)');
   return tpl;
 }
-
-// ======= Core simulation =======
+async function loadEmbeddedTemplate(){
+  const inline = getInlineTemplateCSV(); if(inline.length>0) return parseTemplateCSVText(inline);
+  const candidates=[ new URL('PV-1kWp-BP-south15.csv', document.baseURI).href, '/PV-1kWp-BP-south15.csv' ]; let lastErr='(ismeretlen)';
+  for(const url of candidates){ try{ const r=await fetch(url,{cache:'no-store'}); if(!r.ok){ lastErr='HTTP '+r.status+' @ '+url; continue; } const txt=await r.text(); if(txt.trim().length===0){ lastErr='Üres fájl @ '+url; continue; } const a=parseTemplateCSVText(txt); if(a.length) return a; } catch(e){ lastErr=e&&e.message?e.message:String(e); } }
+  throw new Error('Nem találom a sablont. Tedd a „PV-1kWp-BP-south15.csv” fájlt a site gyökerébe, vagy illeszd be a HTML végén található pvTemplateInline blokkba. ('+lastErr+')');
+}
 function simulatePVBattery(load, pv, batt, zeroFeed){
   if(load.length!==8760 || pv.length!==8760) throw new Error('8760 hosszú sorok kellenek');
   const cap=+batt.cap, pLim=+batt.pow, socMinE=clamp(+batt.min,0,100)/100*cap, etaRT=clamp(+batt.eta,0,100)/100; const eta=Math.sqrt(etaRT);
@@ -440,18 +405,14 @@ function simulatePVBattery(load, pv, batt, zeroFeed){
   const totalLoad=sum(load), totalPV=sum(pv), totalImp=sum(gridImp), totalExp=sum(gridExp), totalDir=sum(direct), totalB2L=sum(battDis), totalCh=sum(battCh), totalCurt=sum(curtailed), selfCons=totalDir+totalB2L, selfConsRatio=totalPV>0? selfCons/totalPV:0, selfSuff=totalLoad>0? (totalLoad-totalImp)/totalLoad:0, baselineImp=totalLoad, saved=baselineImp-totalImp, pvZeroOut=sum(pvEffOut);
   return { gridImp, gridExp, battCh, battDis, direct, soc, curtailed, pvEffOut, summary:{ totalLoad,totalPV,totalImp,totalExp,totalDir,totalB2L,totalCh,totalCurt,selfCons,selfConsRatio,selfSuff,baselineImp,saved,pvZeroOut } };
 }
-
-// ======= Finance =======
 function irr(cashflows){ let lo=-0.99, hi=1.0, mid=0.0; const f=r=> cashflows.reduce((acc,cf,t)=> acc + cf/Math.pow(1+r,t),0); let flo=f(lo), fhi=f(hi); if(flo*fhi>0) return NaN; for(let i=0;i<80;i++){ mid=(lo+hi)/2; const fm=f(mid); if(Math.abs(fm)<1e-9) break; if(flo*fm<0){hi=mid; fhi=fm;} else {lo=mid; flo=fm;} } return mid; }
 function npv(rate, cashflows){ return cashflows.reduce((acc,cf,t)=> acc + cf/Math.pow(1+rate,t),0); }
-
-// ======= Charts =======
 function drawWeeklyChart(canvas, series){
   const dpr=window.devicePixelRatio||1; const ctx=canvas.getContext('2d');
   const parent = canvas.parentElement; let W = 800;
   if(parent){ const cs = getComputedStyle(parent); W = parent.clientWidth - parseFloat(cs.paddingLeft||0) - parseFloat(cs.paddingRight||0); } const H=parseInt(canvas.getAttribute('height'))||280; canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr); canvas.style.width=W+'px'; canvas.style.height=H+'px'; ctx.setTransform(dpr,0,0,dpr,0,0);
   const pad={l:48,r:12,t:12,b:24}; const plotW=W-pad.l-pad.r, plotH=H-pad.t-pad.b; ctx.clearRect(0,0,W,H);
-  const all=[]; series.forEach(s=> s.data.forEach(v=> all.push(v))); let ymin=Math.min(0, Math.min(...all)); let ymax=Math.max(...all); if(!isFinite(ymin)||!isFinite(ymax)) return; if(ymax===ymin) ymax=ymin+1; const step=Math.pow(10, Math.floor(Math.log10((ymax-ymin)/5))); ymin=Math.floor(ymin/step)*step; ymax=Math.ceil(ymax/step)*step; const X=x=> pad.l + (x/167)*plotW; const Y=y=> pad.t + (1 - (y - ymin)/(ymax - ymin))*plotH;
+  const all=[]; series.forEach(s=> s.data.forEach(v=> all.push(v))); let ymin=Math.min(0, Math.min(...all)); let ymax=Math.max(...all); if(!isFinite(ymin)||!isFinite(ymax)) return; if(ymax===ymin) ymax=ymin+1; const X=x=> pad.l + (x/167)*plotW; const Y=y=> pad.t + (1 - (y - ymin)/(ymax - ymin))*plotH;
   ctx.fillStyle='#0b1220'; ctx.fillRect(0,0,W,H);
   ctx.strokeStyle='#1f2937'; ctx.lineWidth=1; ctx.beginPath(); const gh=6; for(let i=0;i<=gh;i++){ const yy=pad.t+i/gh*plotH; ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy);} ctx.stroke();
   ctx.fillStyle='#94a3b8'; ctx.font='12px system-ui,Segoe UI,Roboto,Arial'; ctx.textAlign='right'; ctx.textBaseline='middle'; for(let i=0;i<=gh;i++){ const yy=pad.t+i/gh*plotH; const val=(ymax - (ymax - ymin)*i/gh); ctx.fillText(val.toFixed(0), pad.l-6, yy); } ctx.save(); ctx.translate(12, H/2); ctx.rotate(-Math.PI/2); ctx.fillText('Teljesítmény [kW]', 0, 0); ctx.restore();
@@ -478,25 +439,17 @@ function dayOfYear(month, day){ const md=[31,28,31,30,31,30,31,31,30,31,30,31]; 
 function sliceWeek(arr, doyStart){ const h=doyStart*24; return arr.slice(h, h+24*7); }
 function renderWeeklyChartsUI(){ if(!lastSeries) return; const wm=parseInt($('winterMonth').value); let wd=parseInt($('winterDay').value); const sm=parseInt($('summerMonth').value); let sd=parseInt($('summerDay').value); wd=Math.min(wd, maxDayForMonth(wm)); sd=Math.min(sd, maxDayForMonth(sm)); $('winterDay').value=wd; $('summerDay').value=sd; const winterStart=dayOfYear(wm,wd), summerStart=dayOfYear(sm,sd); const eta=Math.sqrt((+$('batEta').value||0)/100)||1; const battSigned=new Array(8760).fill(0).map((_,i)=> (lastSeries.battDis[i]) - (lastSeries.battCh[i]/eta) ); const seriesWinter=[ {name:'Load', color:'#e5e7eb', data: sliceWeek(lastSeries.load, winterStart)}, {name:'PV', color:'#fbbf24', data: sliceWeek(lastSeries.pv, winterStart)}, {name:'BAT', color:'#22d3ee', data: sliceWeek(battSigned, winterStart)}, ]; const seriesSummer=[ {name:'Load', color:'#e5e7eb', data: sliceWeek(lastSeries.load, summerStart)}, {name:'PV', color:'#fbbf24', data: sliceWeek(lastSeries.pv, summerStart)}, {name:'BAT', color:'#22d3ee', data: sliceWeek(battSigned, summerStart)}, ]; drawWeeklyChart($('chartWinter'), seriesWinter); drawWeeklyChart($('chartSummer'), seriesSummer); }
 function renderYearChartUI(){ if(!lastSeries) return; drawYearChart($('chartYear'), lastSeries.load, lastSeries.pv); }
-
-// ======= Run handler =======
 async function runAll(){
   const btn=$('runBtn'); const dl=$('dlBtn');
   try{
     if(btn){ btn.classList.add('busy'); btn.disabled=true; btn.textContent='Számítás folyamatban…'; }
     if(dl){ dl.disabled=true; }
-
     const loadFile=$('loadFile').files[0]; if(!loadFile) throw new Error('Tölts fel fogyasztási CSV-t.');
     const load=await parseLoadCSV(loadFile);
-
-    // PV forrás mód
-    let pv = null;
-    const pvModeEl = $('pvMode');
-    const pvMode = pvModeEl ? pvModeEl.value : 'upload';
-
+    let pv = null; const pvModeEl = $('pvMode'); const pvMode = pvModeEl ? pvModeEl.value : 'upload';
     if(pvMode==='template'){
       const kwp = +$('pvKwp').value || 0;
-      const tpl = await loadEmbeddedTemplate(); // 1 kWp, kWh/h, 8760
+      const tpl = await loadEmbeddedTemplate();
       pv = tpl.map(v => (+v||0) * kwp);
     } else {
       const pvFiles=['pv1','pv2','pv3'].map(id=> $(id).files[0]).filter(Boolean);
@@ -504,65 +457,18 @@ async function runAll(){
       const pvSeries=[]; for(const f of pvFiles){ pvSeries.push(await parsePVGISFile(f)); }
       pv = new Array(8760).fill(0).map((_,i)=> pvSeries.reduce((acc,s)=> acc + s[i], 0));
     }
-
-    // Akkumulátor + üzemmód
     const batt={ cap:+$('batCap').value, pow:+$('batPow').value, min:+$('batMin').value, eta:+$('batEta').value };
     const zeroFeed=$('zeroFeed').checked;
-
-    // Szimuláció (export engedélyezett & zero-feed)
-    const resStd=simulatePVBattery(load, pv, batt, false);
-    const resZfi=simulatePVBattery(load, pv, batt, true);
-    const res = zeroFeed? resZfi : resStd;
-    lastSeries = { load, pv, ...res }; window.lastSeries = lastSeries;
-
-    // KPI-k
-    $('kpiPV').textContent= fmt(resStd.summary.totalPV,0)+' kWh';
-    $('kpiPVzfi').textContent= fmt(resZfi.summary.pvZeroOut,0)+' kWh';
-    $('kpiUse').textContent= fmt(res.summary.selfCons,0)+' kWh';
-
-    // Energia táblázat
-    const S=res.summary;
-    $('tLoad').textContent=fmt(S.totalLoad,0);
-    $('tPV').textContent=fmt(S.totalPV,0);
-    $('tDirect').textContent=fmt(S.totalDir,0);
-    $('tBatt2Load').textContent=fmt(S.totalB2L,0);
-    $('tImport').textContent=fmt(S.totalImp,0);
-    $('tExport').textContent=fmt(S.totalExp,0);
-    $('tCurtail').textContent=fmt(S.totalCurt,0);
-    $('tSelfSuff').textContent=(S.selfSuff*100).toFixed(1)+'%';
-    $('tSelfCons').textContent=(S.selfConsRatio*100).toFixed(1)+'%';
-
-    // Pénzügyek
-    const ccy=$('ccy').value; const sym=currencySymbol(ccy);
-    const capex=(+$('pvCapex').value||0)+(+$('batCapex').value||0);
-    const pImport=+$('price').value||0;
-    const pExportInput=+$('exportPrice').value||0;
-    const usedExportPrice= zeroFeed? 0 : pExportInput;
-    const firstYearSavings=(S.saved*pImport)+(S.totalExp*usedExportPrice);
-    const esc=(+$('esc').value||0)/100; const rate=(+$('rate').value||0)/100; const years=Math.max(1, +$('years').value||25);
-    const cfs=[-capex]; for(let y=1;y<=years;y++){ cfs.push(firstYearSavings*Math.pow(1+esc, y-1)); }
-    const irrVal=irr(cfs); const npvVal=npv(rate, cfs); const payback= firstYearSavings>0? capex/firstYearSavings : NaN;
-
-    $('tCapex').textContent=fmt(capex,0)+sym;
-    $('tSav').textContent=fmt(firstYearSavings,0)+sym+'/év';
-    $('tPayback').textContent=isFinite(payback)? (payback.toFixed(1)+' év') : '–';
-    $('tNPV').textContent=fmt(npvVal,0)+sym;
-    $('tIRR').textContent=isFinite(irrVal)? ((irrVal*100).toFixed(2)+'%') : '–';
-
-    // Grafikonok
-    renderWeeklyChartsUI();
-    renderYearChartUI();
-
-    if(dl){ dl.disabled=false; }
+    const resStd=simulatePVBattery(load, pv, batt, false); const resZfi=simulatePVBattery(load, pv, batt, true); const res = zeroFeed? resZfi : resStd; lastSeries = { load, pv, ...res };
+    $('kpiPV').textContent= fmt(resStd.summary.totalPV,0)+' kWh'; $('kpiPVzfi').textContent= fmt(resZfi.summary.pvZeroOut,0)+' kWh'; $('kpiUse').textContent= fmt(res.summary.selfCons,0)+' kWh';
+    const S=res.summary; $('tLoad').textContent=fmt(S.totalLoad,0); $('tPV').textContent=fmt(S.totalPV,0); $('tDirect').textContent=fmt(S.totalDir,0); $('tBatt2Load').textContent=fmt(S.totalB2L,0); $('tImport').textContent=fmt(S.totalImp,0); $('tExport').textContent=fmt(S.totalExp,0); $('tCurtail').textContent=fmt(S.totalCurt,0); $('tSelfSuff').textContent=(S.selfSuff*100).toFixed(1)+'%'; $('tSelfCons').textContent=(S.selfConsRatio*100).toFixed(1)+'%';
+    const ccy=$('ccy').value; const sym=currencySymbol(ccy); const capex=(+$('pvCapex').value||0)+(+$('batCapex').value||0); const pImport=+$('price').value||0; const pExportInput=+$('exportPrice').value||0; const usedExportPrice= zeroFeed? 0 : pExportInput; const firstYearSavings=(S.saved*pImport)+(S.totalExp*usedExportPrice); const esc=(+$('esc').value||0)/100; const rate=(+$('rate').value||0)/100; const years=Math.max(1, +$('years').value||25); const cfs=[-capex]; for(let y=1;y<=years;y++){ cfs.push(firstYearSavings*Math.pow(1+esc, y-1)); } const irrVal=irr(cfs); const npvVal=npv(rate, cfs); const payback= firstYearSavings>0? capex/firstYearSavings : NaN; $('tCapex').textContent=fmt(capex,0)+sym; $('tSav').textContent=fmt(firstYearSavings,0)+sym+'/év'; $('tPayback').textContent=isFinite(payback)? (payback.toFixed(1)+' év') : '–'; $('tNPV').textContent=fmt(npvVal,0)+sym; $('tIRR').textContent=isFinite(irrVal)? ((irrVal*100).toFixed(2)+'%') : '–';
+    renderWeeklyChartsUI(); renderYearChartUI(); if(dl){ dl.disabled=false; }
   } catch(err){ console.error(err); alert(err.message || String(err)); }
   finally { if(btn){ btn.classList.remove('busy'); btn.disabled=false; btn.textContent='Számítás'; } }
 }
-
-// ======= CSV export =======
 function downloadCSV(filename, rows){ const csv=rows.map(r=> r.map(x=> (typeof x==='number'? String(x).replace('.', ',') : '"'+String(x).replaceAll('"','""')+'"')).join(';')).join('\n'); const blob=new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
-$('dlBtn')?.addEventListener('click', ()=>{ if(!lastSeries) return; const rows=[['hour','load_kWh','pv_kWh','grid_import_kWh','grid_export_kWh','batt_soc','batt_charge_kWh','batt_discharge_kWh','direct_pv_used_kWh','curtailed_kWh']]; for(let i=0;i<8760;i++){ rows.push([i+1, lastSeries.load[i], lastSeries.pv[i], lastSeries.gridImp[i], lastSeries.gridExp[i], lastSeries.soc[i], lastSeries.battCh[i], lastSeries.battDis[i], lastSeries.direct[i], lastSeries.curtailed[i]]);} downloadCSV('pv_batt_hourly_results.csv', rows); });
 
-// ======= Bindings =======
 document.addEventListener('DOMContentLoaded', ()=>{
   updateCurrencyLabels(); updateZeroFeedUI(); updatePVModeUI();
   $('ccy').addEventListener('change', updateCurrencyLabels);
@@ -575,71 +481,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if($('pdfBtn')) $('pdfBtn').addEventListener('click', (e)=>{ e.preventDefault(); exportPDF(); });
 });
 window.addEventListener('resize', ()=>{ if(lastSeries){ renderWeeklyChartsUI(); renderYearChartUI(); } });
-
-// ======= PDF EXPORT =======
 function loadScript(src){ return new Promise((resolve,reject)=>{ const s=document.createElement('script'); s.src=src; s.onload=resolve; s.onerror=()=>reject(new Error('Nem sikerült betölteni: '+src)); document.head.appendChild(s); }); }
 async function ensurePDFLibs(){ if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); } if(!window.jspdf){ await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'); } }
-const MM_PER_PX = 0.264583; // 96 DPI
+const MM_PER_PX = 0.264583; 
 async function capture(el){
-  return await window.html2canvas(el,{
-    scale: 2,
-    backgroundColor: '#ffffff',
-    onclone: (doc)=>{
-      doc.querySelectorAll('input, select, textarea').forEach(ctrl=>{
-        const span = doc.createElement('span');
-        span.className = 'print-field';
-        let text = '';
-        const tag = ctrl.tagName.toLowerCase();
-        const type = (ctrl.getAttribute('type')||'').toLowerCase();
-        if(tag==='select'){
-          const opt = ctrl.options[ctrl.selectedIndex];
-          text = opt ? (opt.text || opt.value) : (ctrl.value||'');
-        } else if(type==='checkbox'){
-          text = ctrl.checked ? 'Igen' : 'Nem';
-        } else {
-          text = ctrl.value || '';
-        }
-        span.style.width = '100%';
-        try { ctrl.parentNode.replaceChild(span, ctrl); } catch(e){}
-        span.textContent = text;
-      });
-    }
-  });
-}
+  return await window.html2canvas(el,{ scale: 2, backgroundColor: '#ffffff', onclone: (doc)=>{ doc.querySelectorAll('input, select, textarea').forEach(ctrl=>{ const span = doc.createElement('span'); span.className = 'print-field'; let text = ''; const tag = ctrl.tagName.toLowerCase(); const type = (ctrl.getAttribute('type')||'').toLowerCase(); if(tag==='select'){ const opt = ctrl.options[ctrl.selectedIndex]; text = opt ? (opt.text || opt.value) : (ctrl.value||''); } else if(type==='checkbox'){ text = ctrl.checked ? 'Igen' : 'Nem'; } else { text = ctrl.value || ''; } span.style.width = '100%'; try { ctrl.parentNode.replaceChild(span, ctrl); } catch(e){} span.textContent = text; }); } }); }
 async function exportPDF(){ const btn=$('pdfBtn'); if(btn){ btn.disabled=true; btn.textContent='PDF készítés…'; }
-  try{
-    await ensurePDFLibs();
-    if(lastSeries){ renderWeeklyChartsUI(); renderYearChartUI(); await new Promise(r=>requestAnimationFrame(()=>r())); }
-    const { jsPDF } = window.jspdf; const pdf=new jsPDF('p','mm','a4');
-    const pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight();
-    const margin=12, topM=16, bottomM=16; const usableW=pageW-2*margin, usableH=pageH-topM-bottomM;
-    function addFooter(){ pdf.setFontSize(9); pdf.setTextColor(120); pdf.text('Copyright © 2025 Wattmanager Kft.', pageW/2, pageH-6, {align:'center'}); }
-    async function addGroupToNewPage(els, isFirst){
-      if(!isFirst) pdf.addPage();
-      const canvases=[]; let maxW=0, sumH=0;
-      for(const el of els){ if(!el) continue; const c=await capture(el); canvases.push(c); if(c.width>maxW) maxW=c.width; sumH+=c.height; }
-      if(canvases.length===0){ return; }
-      const scaleW = usableW / (maxW * MM_PER_PX);
-      const scaleH = usableH / (sumH * MM_PER_PX);
-      const scale  = Math.min(scaleW, scaleH, 1.0);
-      let y = topM;
-      for(const c of canvases){
-        const wmm = c.width * MM_PER_PX * scale;
-        const hmm = c.height* MM_PER_PX * scale;
-        const x = margin + (usableW - wmm)/2;
-        const img = c.toDataURL('image/png', 1.0);
-        pdf.addImage(img,'PNG', x, y, wmm, hmm);
-        y += hmm + 2;
-      }
-      addFooter();
-    }
-    await addGroupToNewPage([ $('coverCard'), $('inputsCard') ], true);
-    await addGroupToNewPage([ $('resultsCard') ], false);
-    await addGroupToNewPage([ $('chartsCard'), $('yearCard') ], false);
-    pdf.save('PV_Akku_jelentes.pdf');
-  } catch(e){ console.error(e); alert('PDF export hiba: '+(e.message||e)); }
-  finally { if(btn){ btn.disabled=false; btn.textContent='PDF export'; } }
-}
+  try{ await ensurePDFLibs(); if(lastSeries){ renderWeeklyChartsUI(); renderYearChartUI(); await new Promise(r=>requestAnimationFrame(()=>r())); } const { jsPDF } = window.jspdf; const pdf=new jsPDF('p','mm','a4'); const pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight(); const margin=12, topM=16, bottomM=16; const usableW=pageW-2*margin, usableH=pageH-topM-bottomM; function addFooter(){ pdf.setFontSize(9); pdf.setTextColor(120); pdf.text('Copyright © 2025 Wattmanager Kft.', pageW/2, pageH-6, {align:'center'}); } async function addGroupToNewPage(els, isFirst){ if(!isFirst) pdf.addPage(); const canvases=[]; let maxW=0, sumH=0; for(const el of els){ if(!el) continue; const c=await capture(el); canvases.push(c); if(c.width>maxW) maxW=c.width; sumH+=c.height; } if(canvases.length===0){ return; } const scaleW = usableW / (maxW * MM_PER_PX); const scaleH = usableH / (sumH * MM_PER_PX); const scale  = Math.min(scaleW, scaleH, 1.0); let y = topM; for(const c of canvases){ const wmm = c.width * MM_PER_PX * scale; const hmm = c.height* MM_PER_PX * scale; const x = margin + (usableW - wmm)/2; const img = c.toDataURL('image/png', 1.0); pdf.addImage(img,'PNG', x, y, wmm, hmm); y += hmm + 2; } addFooter(); }
+    await addGroupToNewPage([ $('coverCard'), $('inputsCard') ], true); await addGroupToNewPage([ $('resultsCard') ], false); await addGroupToNewPage([ $('chartsCard'), $('yearCard') ], false); pdf.save('PV_Akku_jelentes.pdf'); } catch(e){ console.error(e); alert('PDF export hiba: '+(e.message||e)); } finally { if(btn){ btn.disabled=false; btn.textContent='PDF export'; } } }
 window.addEventListener('error', (e)=>{ try{ console.error(e.error||e.message); }catch{} alert('Hiba: '+(e.message||'ismeretlen')); });
 window.addEventListener('unhandledrejection', (e)=>{ try{ console.error(e.reason); }catch{} const msg = e?.reason?.message || String(e.reason||'ismeretlen'); alert('Hiba: '+msg); });
 window.runAll = runAll;
